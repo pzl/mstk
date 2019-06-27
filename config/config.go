@@ -284,7 +284,7 @@ And sets up the configured logger level (-v) and output (-j). This will flush th
 func (m *Mgr) Parse() error {
 	pflag.Parse()
 
-	v, err := pflag.CommandLine.GetInt("verbose")
+	v, err := pflag.CommandLine.GetCount("verbose")
 	if err != nil {
 		return err
 	}
