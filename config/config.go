@@ -304,3 +304,6 @@ func (m *Mgr) Parse() error {
 	}
 	return nil
 }
+
+// Convenience function for adding pflags
+func (m *Mgr) SetFlags(f func(*pflag.FlagSet)) { f(pflag.CommandLine) }
