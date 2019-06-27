@@ -196,6 +196,7 @@ func XDGConfigHome(dir string) string {
 	return filepath.Join("/etc/xdg", dir)
 }
 
+// sets logger level, based on -v count
 func SetLogLevel(log *logrus.Logger, v int) {
 	lvls := []logrus.Level{
 		logrus.WarnLevel,
@@ -211,6 +212,7 @@ func SetLogLevel(log *logrus.Logger, v int) {
 	log.SetLevel(lvls[v])
 }
 
+// searches default config dirs, and CONFIG_DIR, -d and -c into koanf
 func (m *Mgr) LoadConfigFiles(app string) error {
 	m.SearchDir(filepath.Join("/etc", app))
 	m.SearchDir(XDGConfigHome(app))
@@ -236,16 +238,19 @@ func (m *Mgr) LoadConfigFiles(app string) error {
 	return nil
 }
 
+// loads env vars into koanf
 func (m *Mgr) LoadEnv() error {
 	return m.K.Load(env.Provider("", ".", func(key string) string {
 		return strings.Replace(strings.ToLower(key), "_", "-", 0)
 	}), nil)
 }
 
+// alias for loading pflag into koanf
 func (m *Mgr) LoadFlags() error {
 	return m.K.Load(posflag.Provider(pflag.CommandLine, ".", m.K), nil)
 }
 
+// adds common defined flags (-d, -c, -j, -v)
 func (m *Mgr) CommonFlags() *pflag.FlagSet {
 	common := pflag.NewFlagSet("common", pflag.ExitOnError)
 	common.StringP("conf-dir", "d", "", "Search this directory for config files")
@@ -255,6 +260,7 @@ func (m *Mgr) CommonFlags() *pflag.FlagSet {
 	return common
 }
 
+// Sets logger output format (+ flushes if needed)
 func (m *Mgr) SetupLogger() error {
 	j, err := pflag.CommandLine.GetBool("json")
 	if err != nil {
@@ -265,6 +271,16 @@ func (m *Mgr) SetupLogger() error {
 	return nil
 }
 
+/*
+Parses all configurations from the various sources:
+
+- Config Files (via config dirs, files, incl those specified via ENV vars or flags)
+- Environment variables
+- Flags
+
+And sets up the configured logger level (-v) and output (-j). This will flush the log buffer if buffered.
+
+*/
 func (m *Mgr) Parse() error {
 	pflag.Parse()
 
