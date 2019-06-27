@@ -224,10 +224,10 @@ func (m *Mgr) LoadConfigFiles(app string) error {
 	if !pflag.Parsed() {
 		return errors.New("call Parse() before loading config files")
 	}
-	if cd, err := pflag.CommandLine.GetString("conf-dir"); err == nil {
+	if cd, err := pflag.CommandLine.GetString("conf-dir"); err == nil && cd != "" {
 		m.SearchDir(cd) // load --conf-dir  if passed as a flag
 	}
-	if cf, err := pflag.CommandLine.GetString("config"); err == nil {
+	if cf, err := pflag.CommandLine.GetString("config"); err == nil && cf != "" {
 		// load explicit config file if passed as -c
 		parser, err := FileParser(cf)
 		if err != nil {
