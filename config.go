@@ -1,11 +1,4 @@
-// This is a wrapper around koanf and pflag
-// It includes some universally common flags (-v, -c (config))
-// and standardizes the config loading order to
-// file < environment < flag
-// and it includes some config directory file searching.
-// basically adds back some convenience that viper had
-// but with the flexibility of koanf
-package config
+package mstk
 
 import (
 	"bytes"
@@ -30,21 +23,28 @@ import (
 	"github.com/spf13/pflag"
 )
 
-type Mgr struct {
+// This is a wrapper around koanf and pflag
+// It includes some universally common flags (-v, -c (config))
+// and standardizes the config loading order to
+// file < environment < flag
+// and it includes some config directory file searching.
+// basically adds back some convenience that viper had
+// but with the flexibility of koanf
+type Config struct {
 	Log       *logrus.Logger
 	K         *koanf.Koanf
 	confDir   string
 	confNames []string
 }
 
-func FileNames(n ...string) func(*Mgr) {
-	return func(m *Mgr) {
-		m.confNames = n
+func ConfigFiles(n ...string) func(*Config) {
+	return func(c *Config) {
+		c.confNames = n
 	}
 }
 
-func New(dir string, opts ...func(*Mgr)) *Mgr {
-	m := &Mgr{
+func NewConfig(dir string, opts ...func(*Config)) *Config {
+	c := &Config{
 		Log:       logger.NewBuffered(),
 		K:         koanf.New("."),
 		confDir:   dir,
@@ -52,13 +52,13 @@ func New(dir string, opts ...func(*Mgr)) *Mgr {
 	}
 	for _, o := range opts {
 		if o != nil {
-			o(m)
+			o(c)
 		}
 	}
-	return m
+	return c
 }
 
-func (m *Mgr) SearchDir(dir string) {
+func (c *Config) SearchDir(dir string) {
 	exts := map[string]struct{}{
 		".js":   struct{}{},
 		".json": struct{}{},
@@ -74,12 +74,12 @@ func (m *Mgr) SearchDir(dir string) {
 	filepath.Walk(dir, func(path string, info os.FileInfo, err error) error { //nolint
 		if err != nil {
 			if !os.IsNotExist(err) {
-				m.Log.WithError(err).Error("unable to search config dir")
+				c.Log.WithError(err).Error("unable to search config dir")
 			}
 			return err
 		}
 
-		l := m.Log.WithFields(logrus.Fields{
+		l := c.Log.WithFields(logrus.Fields{
 			"path":  path,
 			"name":  info.Name(),
 			"isdir": info.IsDir(),
@@ -104,7 +104,7 @@ func (m *Mgr) SearchDir(dir string) {
 		name := filename[:li]
 
 		match := false
-		for _, f := range m.confNames {
+		for _, f := range c.confNames {
 			if strings.ToLower(name) == strings.ToLower(f) {
 				match = true
 				break
@@ -118,13 +118,13 @@ func (m *Mgr) SearchDir(dir string) {
 		ext := filename[li:]
 		if _, ok := exts[ext]; ok {
 			l.Trace("loading file!")
-			parser, err := FileParser(filename)
+			parser, err := fileParser(filename)
 			if err != nil {
 				l.WithError(err).Error("unable to determine parser for file")
 				return err
 			}
-			m.Log.WithField("file", path).Debug("Loading config file")
-			err = m.K.Load(file.Provider(path), parser)
+			c.Log.WithField("file", path).Debug("Loading config file")
+			err = c.K.Load(file.Provider(path), parser)
 			if err != nil {
 				l.WithError(err).Error("unable to parse file")
 			}
@@ -135,7 +135,7 @@ func (m *Mgr) SearchDir(dir string) {
 	})
 }
 
-func FileParser(filename string) (koanf.Parser, error) {
+func fileParser(filename string) (koanf.Parser, error) {
 	ext := filepath.Ext(filename)
 	switch ext {
 	case ".js", ".json":
@@ -186,7 +186,7 @@ func FileParser(filename string) (koanf.Parser, error) {
 	return nil, fmt.Errorf("no provider found for file %s", filename)
 }
 
-func XDGConfigHome(dir string) string {
+func xdgCfgHome(dir string) string {
 	if xdg := os.Getenv("XDG_CONFIG_HOME"); xdg != "" {
 		return filepath.Join(xdg, dir)
 	}
@@ -197,7 +197,7 @@ func XDGConfigHome(dir string) string {
 }
 
 // sets logger level, based on -v count
-func SetLogLevel(log *logrus.Logger, v int) {
+func logLvl(log *logrus.Logger, v int) {
 	lvls := []logrus.Level{
 		logrus.WarnLevel,
 		logrus.InfoLevel,
@@ -213,45 +213,45 @@ func SetLogLevel(log *logrus.Logger, v int) {
 }
 
 // searches default config dirs, and CONFIG_DIR, -d and -c into koanf
-func (m *Mgr) LoadConfigFiles(app string) error {
-	m.SearchDir(filepath.Join("/etc", app))
-	m.SearchDir(XDGConfigHome(app))
-	m.SearchDir(".")
+func (c *Config) LoadConfigFiles(app string) error {
+	c.SearchDir(filepath.Join("/etc", app))
+	c.SearchDir(xdgCfgHome(app))
+	c.SearchDir(".")
 	if cdir := os.Getenv("CONFIG_DIR"); cdir != "" {
-		m.SearchDir(cdir) //search $CONFIG_DIR if passed in env
+		c.SearchDir(cdir) //search $CONFIG_DIR if passed in env
 	}
 
 	if !pflag.Parsed() {
 		return errors.New("call Parse() before loading config files")
 	}
 	if cd, err := pflag.CommandLine.GetString("conf-dir"); err == nil && cd != "" {
-		m.SearchDir(cd) // load --conf-dir  if passed as a flag
+		c.SearchDir(cd) // load --conf-dir  if passed as a flag
 	}
 	if cf, err := pflag.CommandLine.GetString("config"); err == nil && cf != "" {
 		// load explicit config file if passed as -c
-		parser, err := FileParser(cf)
+		parser, err := fileParser(cf)
 		if err != nil {
 			return err
 		}
-		return m.K.Load(file.Provider(cf), parser)
+		return c.K.Load(file.Provider(cf), parser)
 	}
 	return nil
 }
 
 // loads env vars into koanf
-func (m *Mgr) LoadEnv() error {
-	return m.K.Load(env.Provider("", ".", func(key string) string {
+func (c *Config) LoadEnv() error {
+	return c.K.Load(env.Provider("", ".", func(key string) string {
 		return strings.Replace(strings.ToLower(key), "_", "-", 0)
 	}), nil)
 }
 
 // alias for loading pflag into koanf
-func (m *Mgr) LoadFlags() error {
-	return m.K.Load(posflag.Provider(pflag.CommandLine, ".", m.K), nil)
+func (c *Config) LoadFlags() error {
+	return c.K.Load(posflag.Provider(pflag.CommandLine, ".", c.K), nil)
 }
 
 // adds common defined flags (-d, -c, -j, -v)
-func (m *Mgr) CommonFlags() *pflag.FlagSet {
+func (c *Config) CommonFlags() *pflag.FlagSet {
 	common := pflag.NewFlagSet("common", pflag.ExitOnError)
 	common.StringP("conf-dir", "d", "", "Search this directory for config files")
 	common.StringP("config", "c", "", "Config file to read values from")
@@ -261,12 +261,12 @@ func (m *Mgr) CommonFlags() *pflag.FlagSet {
 }
 
 // Sets logger output format (+ flushes if needed)
-func (m *Mgr) SetupLogger() error {
+func (c *Config) logFmt() error {
 	j, err := pflag.CommandLine.GetBool("json")
 	if err != nil {
 		return err
 	}
-	logger.SetFormat(m.Log, j)
+	logger.SetFormat(c.Log, j)
 
 	return nil
 }
@@ -281,29 +281,29 @@ Parses all configurations from the various sources:
 And sets up the configured logger level (-v) and output (-j). This will flush the log buffer if buffered.
 
 */
-func (m *Mgr) Parse() error {
+func (c *Config) Parse() error {
 	pflag.Parse()
 
 	v, err := pflag.CommandLine.GetCount("verbose")
 	if err != nil {
 		return err
 	}
-	SetLogLevel(m.Log, v)
+	logLvl(c.Log, v)
 
-	if err := m.LoadConfigFiles(m.confDir); err != nil {
+	if err := c.LoadConfigFiles(c.confDir); err != nil {
 		return err
 	}
-	if err := m.LoadEnv(); err != nil { // load environments next
+	if err := c.LoadEnv(); err != nil { // load environments next
 		return err
 	}
-	if err := m.LoadFlags(); err != nil { // load CLI flags last
+	if err := c.LoadFlags(); err != nil { // load CLI flags last
 		return err
 	}
-	if err := m.SetupLogger(); err != nil {
+	if err := c.logFmt(); err != nil {
 		return err
 	}
 	return nil
 }
 
 // Convenience function for adding pflags
-func (m *Mgr) SetFlags(f func(*pflag.FlagSet)) { f(pflag.CommandLine) }
+func (c *Config) SetFlags(f func(*pflag.FlagSet)) { f(pflag.CommandLine) }

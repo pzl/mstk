@@ -1,9 +1,10 @@
+package mstk
+
 /*
 Default configs for chi middleware
 
 And some common middlewares to use
 */
-package router
 
 import (
 	"context"
@@ -33,6 +34,7 @@ func contentJSON(next http.Handler) http.Handler {
 	})
 }
 
+// middleware
 func APIVer(ver int) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

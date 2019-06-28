@@ -1,9 +1,4 @@
-/*
-http.Server with sane defaults,
-able to listen on multiple nets,
-and with optimal SSL config
-*/
-package server
+package mstk
 
 import (
 	"context"
@@ -23,22 +18,27 @@ type Cfg struct {
 	Listen  []string
 }
 
-type OptFunc func(s *Server)
+type SrvOpt func(s *Server)
 
+/*
+http.Server with sane defaults,
+able to listen on multiple nets,
+and with optimal SSL config
+*/
 type Server struct {
-	Srv *http.Server
-	Log *logrus.Logger
-	Cfg *Cfg
+	Http *http.Server
+	Log  *logrus.Logger
+	Cfg  *Cfg
 }
 
-func New(opts ...OptFunc) *Server {
+func NewServer(opts ...SrvOpt) *Server {
 	c := Cfg{ //defaults
 		JSON:   false,
 		Listen: []string{"tcp4", "tcp6"},
 	}
 	s := &Server{
 		Cfg: &c,
-		Srv: &http.Server{
+		Http: &http.Server{
 			Addr:           ":0",
 			ReadTimeout:    5 * time.Second,
 			WriteTimeout:   10 * time.Second,
@@ -63,14 +63,14 @@ func New(opts ...OptFunc) *Server {
 func (s *Server) Start(ctx context.Context) (err error) {
 	errs := make(chan error)
 	for _, l := range s.Cfg.Listen {
-		s.Log.WithField("transport", l).WithField("addr", s.Srv.Addr).Debug("opening socket")
-		n, err := net.Listen(l, s.Srv.Addr)
+		s.Log.WithField("transport", l).WithField("addr", s.Http.Addr).Debug("opening socket")
+		n, err := net.Listen(l, s.Http.Addr)
 		if err != nil {
 			return err
 		}
 		go s.listen(n, s.Cfg.SSLCert, s.Cfg.SSLPKey, errs)
 	}
-	s.Log.Infof("listening on %s", s.Srv.Addr)
+	s.Log.Infof("listening on %s", s.Http.Addr)
 
 	select {
 	case err = <-errs:
@@ -87,27 +87,27 @@ func (s *Server) Start(ctx context.Context) (err error) {
 
 func (s *Server) listen(l net.Listener, cert, key string, errs chan<- error) {
 	if cert != "" && key != "" {
-		errs <- s.Srv.ServeTLS(l, cert, key)
+		errs <- s.Http.ServeTLS(l, cert, key)
 	} else {
-		errs <- s.Srv.Serve(l)
+		errs <- s.Http.Serve(l)
 	}
 }
 
 func (s *Server) Shutdown(ctx context.Context) {
-	if s.Srv != nil {
-		err := s.Srv.Shutdown(ctx)
+	if s.Http != nil {
+		err := s.Http.Shutdown(ctx)
 		if err != nil {
 			s.Log.WithError(err).Error("failed to shutdown http server gracefully")
 		} else {
-			s.Srv = nil
+			s.Http = nil
 		}
 	}
 }
 
 // Usage: server.New(server.Addr("127.0.0.1:3333"))
-func Addr(addr string) OptFunc { return func(s *Server) { s.Srv.Addr = addr } }
+func Addr(addr string) SrvOpt { return func(s *Server) { s.Http.Addr = addr } }
 
-func SSL(cert string, key string) OptFunc {
+func SSL(cert string, key string) SrvOpt {
 	return func(s *Server) {
 		s.Cfg.SSLCert = cert
 		s.Cfg.SSLPKey = key
