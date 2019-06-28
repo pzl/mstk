@@ -251,7 +251,7 @@ func (c *Config) LoadFlags() error {
 }
 
 // adds common defined flags (-d, -c, -j, -v)
-func (c *Config) CommonFlags() *pflag.FlagSet {
+func CommonFlags() *pflag.FlagSet {
 	common := pflag.NewFlagSet("common", pflag.ExitOnError)
 	common.StringP("conf-dir", "d", "", "Search this directory for config files")
 	common.StringP("config", "c", "", "Config file to read values from")
