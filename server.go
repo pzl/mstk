@@ -79,9 +79,9 @@ func (s *Server) Start(ctx context.Context) (err error) {
 	if err != nil && err != http.ErrServerClosed {
 		s.Log.WithError(err).Error("Http Server stopped unexpectedly")
 		s.Shutdown(ctx)
-	} else {
-		s.Log.Info("server stopped")
+		return err
 	}
+	s.Log.Info("server stopped")
 	return nil
 }
 
