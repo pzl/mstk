@@ -132,8 +132,13 @@ func (cle *ChiLogEntry) Panic(v interface{}, stack []byte) {
 
 // In an HTTP-handler context, call logger.GetLog(r) to get the logger instance to use
 func GetLog(r *http.Request) logrus.FieldLogger {
-	entry := middleware.GetLogEntry(r).(*ChiLogEntry)
-	return entry.l
+	entry := middleware.GetLogEntry(r)
+	if entry != nil {
+		if e, ok := entry.(*ChiLogEntry); ok {
+			return e.l
+		}
+	}
+	return logrus.StandardLogger()
 }
 
 func Log(r *http.Request, key string, value interface{}) {
