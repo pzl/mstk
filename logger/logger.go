@@ -1,6 +1,7 @@
 package logger
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"time"
@@ -137,6 +138,13 @@ func GetLog(r *http.Request) logrus.FieldLogger {
 		if e, ok := entry.(*ChiLogEntry); ok {
 			return e.l
 		}
+	}
+	return logrus.StandardLogger()
+}
+
+func LogFromCtx(ctx context.Context) logrus.FieldLogger {
+	if entry, ok := ctx.Value(middleware.LogEntryCtxKey).(*ChiLogEntry); ok {
+		return entry.l
 	}
 	return logrus.StandardLogger()
 }
