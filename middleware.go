@@ -10,7 +10,7 @@ import (
 	"context"
 	"net/http"
 
-	"github.com/go-chi/chi/middleware"
+	"github.com/go-chi/chi/v5/middleware"
 	"github.com/pzl/mstk/logger"
 	"github.com/sirupsen/logrus"
 )

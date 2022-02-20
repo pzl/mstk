@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/go-chi/chi/middleware"
+	"github.com/go-chi/chi/v5/middleware"
 
 	"github.com/sirupsen/logrus"
 )
@@ -113,7 +113,7 @@ type ChiLogEntry struct {
 	l logrus.FieldLogger
 }
 
-func (cle *ChiLogEntry) Write(status int, bytes int, elapsed time.Duration) {
+func (cle *ChiLogEntry) Write(status int, bytes int, header http.Header, elapsed time.Duration, extra interface{}) {
 	cle.l = cle.l.WithFields(logrus.Fields{
 		"resp_status":     status,
 		"resp_bytes_len":  bytes,
